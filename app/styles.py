@@ -58,4 +58,30 @@ APP_STYLE = """
         font-size: 14px;
         background: transparent;
     }
+
+
+QLabel#progressLabel {
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QProgressBar#exerciseProgress {
+    background-color: #1e293b;
+    border: none;
+    border-radius: 5px;
+    min-height: 10px;
+    max-height: 10px;
+}
+
+QProgressBar#exerciseProgress::chunk {
+    background-color: #22c55e;
+    border-radius: 5px;
+}
+
+QPushButton#nextButton:disabled {
+    background-color: #334155;
+    color: #94a3b8;
+}
+
 """

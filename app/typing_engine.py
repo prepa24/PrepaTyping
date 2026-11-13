@@ -28,3 +28,26 @@ def calculate_wpm(typed, elapsed_seconds):
     words = len(typed) / 5
 
     return round(words / minutes)
+
+
+
+def compare_characters(target: str, typed: str) -> list[str]:
+    """
+    Compare typed characters against the target text.
+
+    Returns:
+        correct   - character matches
+        incorrect - character does not match
+        pending   - character not typed yet
+    """
+    results = []
+
+    for index, character in enumerate(target):
+        if index >= len(typed):
+            results.append("pending")
+        elif typed[index] == character:
+            results.append("correct")
+        else:
+            results.append("incorrect")
+
+    return results

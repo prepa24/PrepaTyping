@@ -1,6 +1,5 @@
 
 from PySide6.QtCore import Qt
-
 from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
@@ -8,7 +7,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QFrame,
+    QComboBox,
+    QProgressBar,
 )
+from html import escape
+
+from app.typing_engine import compare_characters
 
 
 class TypingUI:
@@ -50,12 +54,39 @@ class TypingUI:
 
         layout.addLayout(stats_layout)
 
+        # Level selection
+        self.level_selector = QComboBox()
+
+        self.level_selector.addItem("Beginner", "beginner")
+        self.level_selector.addItem("Intermediate", "intermediate")
+        self.level_selector.addItem("Advanced", "advanced")
+        self.level_selector.addItem("Python", "python")
+
+        self.level_selector.setObjectName("levelSelector")
+        layout.addWidget(self.level_selector)
+
+        # Exercise progress
+        self.progress_label = QLabel("Exercise 0/0")
+        self.progress_label.setObjectName("progressLabel")
+        layout.addWidget(self.progress_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setObjectName("exerciseProgress")
+        layout.addWidget(self.progress_bar)
+
         # Practice text
-        self.practice_text = QLabel(
+        self.target_text = (
             "The first logiciel Python with ChatGPT."
         )
+
+        self.practice_text = QLabel()
+        self.practice_text.setText(self.target_text)
         self.practice_text.setWordWrap(True)
         self.practice_text.setObjectName("practiceText")
+
         layout.addWidget(self.practice_text)
 
         # Typing input
@@ -67,17 +98,30 @@ class TypingUI:
         self.typing_input.textChanged.connect(
             self.check_typing
         )
+
         layout.addWidget(self.typing_input)
 
-        # Start button
-        self.start_button = QPushButton(
-            "Start Practice"
-        )
+        # Action buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(12)
+
+        self.start_button = QPushButton("Start Practice")
+        self.start_button.setObjectName("startButton")
         self.start_button.clicked.connect(
             self.start_practice
         )
-        layout.addWidget(self.start_button)
 
+        self.next_button = QPushButton("Next Exercise")
+        self.next_button.setObjectName("nextButton")
+        self.next_button.setEnabled(False)
+        self.next_button.clicked.connect(
+            self.next_exercise
+        )
+
+        buttons_layout.addWidget(self.start_button)
+        buttons_layout.addWidget(self.next_button)
+
+        layout.addLayout(buttons_layout)
         self.setLayout(layout)
 
     def create_stat_card(self, label, value):
@@ -104,3 +148,27 @@ class TypingUI:
         card_layout.addWidget(name_label)
 
         return card, value_label
+
+    def highlight_characters(self, target: str, typed: str):
+        results = compare_characters(target, typed)
+
+        colors = {
+            "correct": "#22c55e",
+            "incorrect": "#ef4444",
+            "pending": "#e2e8f0",
+        }
+
+        highlighted_text = []
+
+        for index, status in enumerate(results):
+            character = escape(target[index])
+            color = colors[status]
+
+            highlighted_text.append(
+                f'<span style="color: {color};">'
+                f'{character}</span>'
+            )
+
+        self.practice_text.setText(
+            "".join(highlighted_text)
+        )
