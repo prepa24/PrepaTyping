@@ -1,4 +1,13 @@
-# ⌨️ PrepaTyping
+<div align="center">
+  <img src="assets/prepatyping.png" alt="PrepaTyping Logo" width="110">
+
+  <h1>PrepaTyping</h1>
+
+  <p>
+    An offline typing practice application for Linux,
+    built with Python and PySide6.
+  </p>
+</div>
 
 **An offline typing practice application for Linux, built with Python and PySide6.**
 
