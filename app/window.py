@@ -1,6 +1,13 @@
-
+from app.results_dialog import ResultsDialog
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import (
+    QWidget,
+    QMessageBox,
+)
+
+from app.history_dialog import HistoryDialog
+from sqlite3 import Error as SQLiteError
+from app.database import initialize_database, save_session
 
 from app.ui import TypingUI
 from app.styles import APP_STYLE
@@ -26,6 +33,9 @@ class PrepaTyping(QWidget, TypingUI):
 
         self.current_level = "beginner"
         self.current_lesson = None
+        self.exercise_results = {}
+        self.session_saved = False
+        initialize_database()
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_stats)
@@ -68,6 +78,8 @@ class PrepaTyping(QWidget, TypingUI):
         self.session.reset()
 
         self.lesson_manager.set_level(level)
+        self.exercise_results.clear()
+        self.session_saved = False
         self.current_level = level
         self.current_lesson = None
 
@@ -96,6 +108,7 @@ class PrepaTyping(QWidget, TypingUI):
             self.current_lesson = (
                 self.lesson_manager.next_lesson()
             )
+            self.exercise_results.clear()
 
         if self.current_lesson is None:
             return
@@ -127,6 +140,13 @@ class PrepaTyping(QWidget, TypingUI):
     def next_exercise(self):
 
         if not self.session.finished:
+            return
+
+        current, total = self.lesson_manager.get_progress()
+
+        if current >= total and total > 0:
+            self.show_final_results()
+            self.next_button.setEnabled(False)
             return
 
         self.current_lesson = (
@@ -172,7 +192,6 @@ class PrepaTyping(QWidget, TypingUI):
         if len(typed) >= len(target):
             self.finish_practice()
 
-    # Finish current exercise
     def finish_practice(self):
 
         if self.session.finished:
@@ -183,8 +202,22 @@ class PrepaTyping(QWidget, TypingUI):
 
         self.update_stats()
 
-        self.typing_input.setEnabled(False)
+        typed = self.typing_input.toPlainText()
+        elapsed = self.session.elapsed_seconds()
 
+        result = {
+            "wpm": calculate_wpm(typed, elapsed),
+            "accuracy": calculate_accuracy(
+                self.target_text, typed
+            ),
+            "time": elapsed,
+        }
+
+        current, total = self.lesson_manager.get_progress()
+
+        self.exercise_results[current] = result
+
+        self.typing_input.setEnabled(False)
         self.start_button.setText("Restart Practice")
         self.next_button.setEnabled(True)
 
@@ -211,3 +244,62 @@ class PrepaTyping(QWidget, TypingUI):
         )
 
         self.wpm_label.setText(str(wpm))
+
+
+    
+    def show_final_results(self):
+        if not self.exercise_results:
+            return
+
+        results = list(self.exercise_results.values())
+        total = len(results)
+
+        average_wpm = sum(
+            result["wpm"] for result in results
+        ) / total
+
+        average_accuracy = sum(
+            result["accuracy"] for result in results
+        ) / total
+
+        total_seconds = sum(
+            result["time"] for result in results
+        )
+
+        minutes = int(total_seconds // 60)
+        seconds = int(total_seconds % 60)
+
+        # Save only once per exercise cycle
+        if not self.session_saved:
+            try:
+                save_session(
+                    level=self.current_level,
+                    exercises_completed=total,
+                    average_wpm=average_wpm,
+                    average_accuracy=average_accuracy,
+                    total_seconds=total_seconds,
+                )
+            except SQLiteError as error:
+                QMessageBox.warning(
+                    self,
+                    "Database Error",
+                    f"Could not save session:\n{error}"
+                )
+                return
+
+            self.session_saved = True
+
+        dialog = ResultsDialog(
+            level=self.current_level,
+            exercises=total,
+            average_wpm=average_wpm,
+            average_accuracy=average_accuracy,
+            total_seconds=total_seconds,
+            parent=self,
+        )
+
+        dialog.exec()
+
+    def show_history(self):
+        dialog = HistoryDialog(self)
+        dialog.exec()

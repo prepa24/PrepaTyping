@@ -17,6 +17,7 @@ from app.typing_engine import compare_characters
 
 class TypingUI:
 
+    
     def setup_ui(self):
         layout = QVBoxLayout()
         layout.setSpacing(20)
@@ -101,7 +102,7 @@ class TypingUI:
 
         layout.addWidget(self.typing_input)
 
-        # Action buttons
+        # Practice action buttons
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(12)
 
@@ -122,6 +123,16 @@ class TypingUI:
         buttons_layout.addWidget(self.next_button)
 
         layout.addLayout(buttons_layout)
+
+        # History button
+        self.history_button = QPushButton("View History")
+        self.history_button.setObjectName("historyButton")
+        self.history_button.clicked.connect(
+            self.show_history
+        )
+
+        layout.addWidget(self.history_button)
+
         self.setLayout(layout)
 
     def create_stat_card(self, label, value):

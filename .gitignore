@@ -21,3 +21,6 @@ __pycache__/
 # Local databases
 *.db
 *.sqlite3
+
+# Local SQLite databases
+data/
