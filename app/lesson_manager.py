@@ -21,17 +21,23 @@ class LessonManager:
         self.level = level
         self.load_lessons()
 
-    def next_lesson(self):
-        if not self.lessons:
-            return None
+    def restart_level(self):
+        self.load_lessons()
 
+    def next_lesson(self):
         if self.current_index >= len(self.lessons):
-            self.load_lessons()
+            return None
 
         lesson = self.lessons[self.current_index]
         self.current_index += 1
 
         return lesson
+
+    def is_completed(self):
+        return (
+            len(self.lessons) > 0
+            and self.current_index >= len(self.lessons)
+        )
 
     def get_progress(self):
         return self.current_index, len(self.lessons)

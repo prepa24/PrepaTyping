@@ -4,7 +4,11 @@ from PySide6.QtWidgets import (
     QWidget,
     QMessageBox,
 )
-
+from app.updater import UpdateChecker
+from app.version import APP_VERSION
+import sys
+from pathlib import Path
+from PySide6.QtGui import QIcon
 from app.history_dialog import HistoryDialog
 from sqlite3 import Error as SQLiteError
 from app.database import initialize_database, save_session
@@ -26,6 +30,14 @@ class PrepaTyping(QWidget, TypingUI):
         super().__init__()
 
         self.setWindowTitle("PrepaTyping")
+        if getattr(sys, "frozen", False):
+            base_dir = Path(sys._MEIPASS)
+        else:
+            base_dir = Path(__file__).resolve().parent.parent
+
+        icon_path = base_dir / "assets" / "prepatyping.png"
+
+        self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(1000, 650)
 
         self.session = TypingSession()
@@ -48,7 +60,25 @@ class PrepaTyping(QWidget, TypingUI):
         )
 
         self.update_progress()
+        # Check for updates in background
+        self.update_checker = UpdateChecker(self)
 
+        self.update_checker.update_available.connect(
+            self.show_update_notification
+        )
+
+        self.update_checker.no_update.connect(
+            self.on_no_update
+        )
+
+        self.update_checker.check_failed.connect(
+            self.on_update_error
+        )
+
+        self.update_checker.start()
+
+
+    #sa pou styles
     def apply_styles(self):
         self.setStyleSheet(APP_STYLE)
 
@@ -102,13 +132,13 @@ class PrepaTyping(QWidget, TypingUI):
         self.update_progress()
 
     # Start or restart current exercise
+    
     def start_practice(self):
 
         if self.current_lesson is None:
             self.current_lesson = (
                 self.lesson_manager.next_lesson()
             )
-            self.exercise_results.clear()
 
         if self.current_lesson is None:
             return
@@ -137,6 +167,7 @@ class PrepaTyping(QWidget, TypingUI):
         self.update_progress()
 
     # Load next exercise
+    
     def next_exercise(self):
 
         if not self.session.finished:
@@ -145,18 +176,82 @@ class PrepaTyping(QWidget, TypingUI):
         current, total = self.lesson_manager.get_progress()
 
         if current >= total and total > 0:
-            self.show_final_results()
+            if not self.show_final_results():
+                return
+            # Prepare a new exercise cycle
+            self.current_lesson = None
+            self.exercise_results.clear()
+            self.session_saved = False
+
+            # Reset the lesson sequence
+            self.lesson_manager.set_level(
+                self.current_level
+            )
+
+            self.timer.stop()
+            self.session.reset()
+
+            self.typing_input.blockSignals(True)
+            self.typing_input.clear()
+            self.typing_input.blockSignals(False)
+
+            self.typing_input.setEnabled(False)
+            self.target_text = ""
+            self.practice_text.clear()
+
+            self.wpm_label.setText("0")
+            self.accuracy_label.setText("100%")
+            self.time_label.setText("00:00")
+
+            self.start_button.setText("Start Practice")
             self.next_button.setEnabled(False)
+
+            self.update_progress()
             return
 
         self.current_lesson = (
             self.lesson_manager.next_lesson()
         )
 
-        if self.current_lesson is None:
+        if self.current_lesson is not None:
+            self.start_practice()
+
+
+    
+    def get_next_level(self):
+        levels = [
+            "beginner",
+            "intermediate",
+            "advanced",
+            "python",
+        ]
+
+        current_index = levels.index(self.current_level)
+
+        if current_index + 1 < len(levels):
+            return levels[current_index + 1]
+
+        return None
+
+
+    def advance_to_next_level(self):
+        next_level = self.get_next_level()
+
+        if next_level is None:
+            QMessageBox.information(
+                self,
+                "All Levels Completed",
+                "Congratulations! You have completed all levels."
+            )
             return
 
-        self.start_practice()
+        index = self.level_selector.findData(next_level)
+
+        if index >= 0:
+            self.level_selector.setCurrentIndex(index)
+            self.start_practice()
+
+
 
     # Check typing
     def check_typing(self):
@@ -247,7 +342,9 @@ class PrepaTyping(QWidget, TypingUI):
 
 
     
+    
     def show_final_results(self):
+
         if not self.exercise_results:
             return
 
@@ -266,10 +363,7 @@ class PrepaTyping(QWidget, TypingUI):
             result["time"] for result in results
         )
 
-        minutes = int(total_seconds // 60)
-        seconds = int(total_seconds % 60)
-
-        # Save only once per exercise cycle
+        # Save once per completed cycle
         if not self.session_saved:
             try:
                 save_session(
@@ -279,16 +373,20 @@ class PrepaTyping(QWidget, TypingUI):
                     average_accuracy=average_accuracy,
                     total_seconds=total_seconds,
                 )
+
             except SQLiteError as error:
                 QMessageBox.warning(
                     self,
                     "Database Error",
                     f"Could not save session:\n{error}"
                 )
-                return
+
+                # Do not mark the session as saved
+                return False
 
             self.session_saved = True
 
+        
         dialog = ResultsDialog(
             level=self.current_level,
             exercises=total,
@@ -300,6 +398,36 @@ class PrepaTyping(QWidget, TypingUI):
 
         dialog.exec()
 
+        self.advance_to_next_level()
+
+        return True
+
+
     def show_history(self):
         dialog = HistoryDialog(self)
         dialog.exec()
+
+    def show_update_notification(self, version, url):
+        reply = QMessageBox.question(
+            self,
+            "Update Available",
+            (
+                f"PrepaTyping {version} is available!\n\n"
+                f"Current version: {APP_VERSION}\n\n"
+                "Would you like to open the download page?"
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            import webbrowser
+            webbrowser.open(url)
+
+
+    def on_no_update(self):
+        print("PrepaTyping: No update available.")
+
+
+    def on_update_error(self, error):
+        print(f"Update check failed: {error}")
